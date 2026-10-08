@@ -1,6 +1,6 @@
 # CloudMed AI — Cloud-Based Intelligent Hospital Management System
 
-> Developed for the curriculum **Artificial Intelligence on Cloud Computing**
+> Cloud-Based Intelligent Hospital Management & Clinical AI Platform
 
 [![React](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite-61dafb.svg)](https://react.dev/)
 [![Node.js](https://img.shields.io/badge/Backend-Node.js%20%2F%20Express-339933.svg)](https://nodejs.org/)
@@ -229,5 +229,5 @@ Comprehensive reports prepared in the `docs/` folder:
 
 ## 10. License & Academic Disclaimer
 
-This project is developed for educational purposes for the course **Artificial Intelligence on Cloud Computing**.  
+This project provides intelligent hospital management and clinical analytics capabilities.  
 *Medical Disclaimer: This software provides AI-assisted decision-support information for educational analysis and does not replace the professional diagnostic evaluation of a licensed healthcare provider.*

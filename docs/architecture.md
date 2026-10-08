@@ -2,7 +2,7 @@
 
 ## 1. High-Level Architectural Overview
 
-CloudMed AI is structured as a distributed, loosely-coupled microservice architecture designed specifically for the academic curriculum **Artificial Intelligence on Cloud Computing**. It bridges hospital operations management with predictive machine learning and cloud document persistence.
+CloudMed AI is structured as a distributed, loosely-coupled microservice architecture designed for scalable healthcare operations and real-time clinical intelligence. It bridges hospital operations management with predictive machine learning and cloud document persistence.
 
 ```
                            INTERNET

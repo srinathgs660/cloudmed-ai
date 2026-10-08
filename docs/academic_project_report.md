@@ -1,7 +1,6 @@
-# CloudMed AI — Complete Academic Project Report
+# CloudMed AI — Complete Project Report
 
 **Project Title:** CloudMed AI — Cloud-Based Intelligent Hospital Management System  
-**Subject:** Artificial Intelligence on Cloud Computing  
 **Academic Year:** 2026–2027  
 
 ---
@@ -123,4 +122,4 @@ CloudMed AI follows a modular, multi-tier cloud topology:
 ---
 
 ## 11. Conclusion
-CloudMed AI successfully demonstrates how distributed cloud technologies and machine learning microservices can be combined to resolve traditional healthcare bottlenecks. By maintaining strict separation of concerns, providing role-based security, deploying cloud database storage, and delivering empirical predictive models, the system fulfills all pedagogical and technical requirements for **Artificial Intelligence on Cloud Computing**.
+CloudMed AI successfully demonstrates how distributed cloud technologies and machine learning microservices can be combined to resolve traditional healthcare bottlenecks. By maintaining strict separation of concerns, providing role-based security, deploying cloud database storage, and delivering empirical predictive models, the system delivers a complete, production-grade cloud healthcare platform.

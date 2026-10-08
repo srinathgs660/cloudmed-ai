@@ -52,7 +52,7 @@ export const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold mb-6">
             <Brain className="w-4 h-4 text-teal-600" />
-            Artificial Intelligence on Cloud Computing — Academic Project
+            Intelligent Hospital Management & Clinical Analytics Platform
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 max-w-4xl mx-auto leading-tight">
             Smarter Hospital Management with <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-sky-600">Cloud + AI</span>
@@ -205,7 +205,7 @@ export const LandingPage = () => {
               <span className="text-white font-bold text-base">CloudMed AI</span>
             </div>
             <p className="text-xs text-slate-500 text-center md:text-right">
-              Built for <span className="text-slate-300">Artificial Intelligence on Cloud Computing</span> academic project curriculum.
+              CloudMed AI &mdash; Intelligent Hospital Management & Clinical Analytics Platform.
             </p>
           </div>
           <div className="mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500 leading-relaxed">

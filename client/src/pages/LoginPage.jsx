@@ -72,7 +72,7 @@ export const LoginPage = () => {
 
         <div className="relative z-10 border-t border-teal-700/50 pt-6">
           <p className="text-xs text-teal-300/80">
-            Subject: <strong>Artificial Intelligence on Cloud Computing</strong>
+            CloudMed AI &mdash; Intelligent Hospital Management System
           </p>
         </div>
       </div>

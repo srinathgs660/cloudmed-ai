@@ -1,6 +1,6 @@
 # CloudMed AI - Machine Learning & Analytics Microservice
 
-This microservice provides intelligent predictive modeling and NLP clinical report extraction for CloudMed AI, developed for **Artificial Intelligence on Cloud Computing**.
+This microservice provides intelligent predictive modeling and NLP clinical report extraction for CloudMed AI, developed for intelligent hospital operations and patient risk assessment.
 
 ## Features
 
