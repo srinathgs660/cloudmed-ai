@@ -15,12 +15,13 @@ import {
   Building2,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const DoctorsPage = () => {
   const { user } = useAuth();
-  const [doctors, setDoctors] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [doctors, setDoctors] = useState(() => getCached('doctors') || []);
+  const [departments, setDepartments] = useState(() => getCached('departments') || []);
+  const [loading, setLoading] = useState(() => !getCached('doctors'));
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
 
@@ -52,19 +53,27 @@ export const DoctorsPage = () => {
   const fetchDepartments = async () => {
     try {
       const res = await api.get('/departments');
-      setDepartments(res.data.data || []);
+      const list = res.data.data || [];
+      setDepartments(list);
+      setCached('departments', list);
     } catch (e) {}
   };
 
   const fetchDoctors = async () => {
     try {
-      setLoading(true);
+      if (!doctors.length && (search || departmentFilter)) {
+        setLoading(true);
+      }
       const params = {};
       if (search) params.search = search;
       if (departmentFilter) params.department = departmentFilter;
 
       const res = await api.get('/doctors', { params });
-      setDoctors(res.data.data || []);
+      const list = res.data.data || [];
+      setDoctors(list);
+      if (!search && !departmentFilter) {
+        setCached('doctors', list);
+      }
     } catch (err) {
       console.error('Failed to load doctors:', err);
     } finally {
@@ -113,6 +122,7 @@ export const DoctorsPage = () => {
       } else {
         await api.post('/doctors', formData);
       }
+      invalidateCache('doctors');
       setModalOpen(false);
       fetchDoctors();
     } catch (err) {
@@ -124,6 +134,7 @@ export const DoctorsPage = () => {
     if (!window.confirm('Deactivate this doctor profile?')) return;
     try {
       await api.delete(`/doctors/${id}`);
+      invalidateCache('doctors');
       fetchDoctors();
     } catch (err) {
       alert('Failed to deactivate doctor');

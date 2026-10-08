@@ -15,6 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 const DEPT_ICONS = {
   HeartPulse: HeartPulse,
@@ -27,8 +28,8 @@ const DEPT_ICONS = {
 
 export const DepartmentsPage = () => {
   const { user } = useAuth();
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [departments, setDepartments] = useState(() => getCached('departments') || []);
+  const [loading, setLoading] = useState(() => !getCached('departments'));
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -49,9 +50,11 @@ export const DepartmentsPage = () => {
 
   const fetchDepartments = async () => {
     try {
-      setLoading(true);
+      if (!departments.length) setLoading(true);
       const res = await api.get('/departments');
-      setDepartments(res.data.data || []);
+      const list = res.data.data || [];
+      setDepartments(list);
+      setCached('departments', list);
     } catch (e) {
       console.error('Failed to load departments:', e);
     } finally {
@@ -92,6 +95,7 @@ export const DepartmentsPage = () => {
       } else {
         await api.post('/departments', formData);
       }
+      invalidateCache('departments');
       setModalOpen(false);
       fetchDepartments();
     } catch (err) {
@@ -102,6 +106,7 @@ export const DepartmentsPage = () => {
   const handleToggleStatus = async (id) => {
     try {
       await api.delete(`/departments/${id}`);
+      invalidateCache('departments');
       fetchDepartments();
     } catch (e) {
       alert('Failed to update department status');

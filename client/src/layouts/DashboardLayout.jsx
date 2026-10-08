@@ -33,7 +33,9 @@ export const DashboardLayout = () => {
 
   useEffect(() => {
     fetchNotifications();
-  }, [location.pathname]);
+    const timer = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchNotifications = async () => {
     try {

@@ -5,6 +5,7 @@ const MedicalRecord = require('../models/MedicalRecord');
 const Prescription = require('../models/Prescription');
 const MedicalReport = require('../models/MedicalReport');
 const AIAssessment = require('../models/AIAssessment');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/patients
@@ -13,6 +14,12 @@ const AIAssessment = require('../models/AIAssessment');
 const getPatients = async (req, res, next) => {
   try {
     const { search, bloodGroup, riskLevel, page = 1, limit = 20 } = req.query;
+
+    const cacheKey = `patients_${search || ''}_${bloodGroup || ''}_${riskLevel || ''}_${page}_${limit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
 
     let userQuery = { role: 'PATIENT' };
     if (search) {
@@ -23,7 +30,7 @@ const getPatients = async (req, res, next) => {
       ];
     }
 
-    const matchedUsers = await User.find(userQuery).select('_id');
+    const matchedUsers = await User.find(userQuery).select('_id').lean();
     const matchedUserIds = matchedUsers.map((u) => u._id);
 
     let query = { userId: { $in: matchedUserIds } };
@@ -37,22 +44,28 @@ const getPatients = async (req, res, next) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const patients = await Patient.find(query)
-      .populate('userId', 'name email phone profileImage isActive createdAt')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit));
+    const [patients, total] = await Promise.all([
+      Patient.find(query)
+        .populate('userId', 'name email phone profileImage isActive createdAt')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Patient.countDocuments(query),
+    ]);
 
-    const total = await Patient.countDocuments(query);
-
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       count: patients.length,
       total,
       totalPages: Math.ceil(total / Number(limit)),
       currentPage: Number(page),
       data: patients,
-    });
+    };
+
+    cache.set(cacheKey, responsePayload, 30); // 30 sec TTL
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -166,6 +179,8 @@ const createPatient = async (req, res, next) => {
       bmi: Number(bmi) || 24,
     });
 
+    cache.invalidatePrefix('patients');
+
     res.status(201).json({
       success: true,
       data: patient,
@@ -222,7 +237,9 @@ const updatePatient = async (req, res, next) => {
         ...(bmi && { bmi }),
       },
       { new: true, runValidators: true }
-    ).populate('userId', 'name email phone profileImage');
+    ).populate('userId', 'name email phone profileImage').lean();
+
+    cache.invalidatePrefix('patients');
 
     res.status(200).json({
       success: true,
@@ -245,6 +262,7 @@ const deletePatient = async (req, res, next) => {
 
     // Soft deactivate user
     await User.findByIdAndUpdate(patient.userId, { isActive: false });
+    cache.invalidatePrefix('patients');
 
     res.status(200).json({
       success: true,

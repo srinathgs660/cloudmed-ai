@@ -14,12 +14,13 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const ReportsPage = () => {
   const { user } = useAuth();
-  const [reports, setReports] = useState([]);
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState(() => getCached('reports') || []);
+  const [patients, setPatients] = useState(() => getCached('patients') || []);
+  const [loading, setLoading] = useState(() => !getCached('reports'));
 
   // Upload Modal
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -45,9 +46,11 @@ export const ReportsPage = () => {
 
   const fetchReports = async () => {
     try {
-      setLoading(true);
+      if (!reports.length) setLoading(true);
       const res = await api.get('/reports');
-      setReports(res.data.data || []);
+      const list = res.data.data || [];
+      setReports(list);
+      setCached('reports', list);
     } catch (e) {
       console.error('Failed to load reports:', e);
     } finally {
@@ -79,6 +82,7 @@ export const ReportsPage = () => {
       await api.post('/reports/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      invalidateCache('reports');
       setUploadModalOpen(false);
       setSelectedFile(null);
       fetchReports();
@@ -107,6 +111,7 @@ export const ReportsPage = () => {
         const res = await api.post(`/reports/${selectedReportId}/summarize`, {
           textToSummarize: summaryText,
         });
+        invalidateCache('reports');
         setSummaryResult(res.data.aiSummary);
         fetchReports();
       } else {

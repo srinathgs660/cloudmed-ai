@@ -14,11 +14,12 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { Card, Badge, Button, Loader, RiskCard } from '../components/UI';
+import { getCached, setCached } from '../services/clientCache';
 
 export const PatientDashboard = () => {
   const { user } = useAuth();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getCached('patient_dashboard') || null);
+  const [loading, setLoading] = useState(() => !getCached('patient_dashboard'));
 
   useEffect(() => {
     fetchDashboard();
@@ -26,8 +27,10 @@ export const PatientDashboard = () => {
 
   const fetchDashboard = async () => {
     try {
+      if (!data) setLoading(true);
       const res = await api.get('/dashboard/patient');
       setData(res.data);
+      setCached('patient_dashboard', res.data, 30000);
     } catch (err) {
       console.error('Patient dashboard load failed:', err);
     } finally {

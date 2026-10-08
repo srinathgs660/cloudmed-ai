@@ -4,6 +4,7 @@ const Doctor = require('../models/Doctor');
 const Notification = require('../models/Notification');
 const { uploadToCloudinaryOrLocal } = require('../middleware/upload');
 const { summarizeReport } = require('../services/aiClient');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/reports
@@ -11,10 +12,17 @@ const { summarizeReport } = require('../services/aiClient');
 const getReports = async (req, res, next) => {
   try {
     const { patientId } = req.query;
+
+    const cacheKey = `reports_${req.user.role}_${req.user._id}_${patientId || ''}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     let query = {};
 
     if (req.user.role === 'PATIENT') {
-      const patient = await Patient.findOne({ userId: req.user._id });
+      const patient = await Patient.findOne({ userId: req.user._id }).lean();
       if (!patient) return res.status(200).json({ success: true, count: 0, data: [] });
       query.patientId = patient._id;
     } else if (patientId) {
@@ -30,13 +38,17 @@ const getReports = async (req, res, next) => {
         path: 'doctorId',
         populate: { path: 'userId', select: 'name' },
       })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    res.status(200).json({
+    const result = {
       success: true,
       count: reports.length,
       data: reports,
-    });
+    };
+
+    cache.set(cacheKey, result, 30);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -95,6 +107,9 @@ const uploadReport = async (req, res, next) => {
       });
     }
 
+    cache.invalidatePrefix('reports_');
+    cache.invalidatePrefix('dash_');
+
     res.status(201).json({
       success: true,
       message: 'Report uploaded successfully.',
@@ -129,6 +144,9 @@ const summarizeExistingReport = async (req, res, next) => {
       urgency: summaryData.urgency,
     };
     await report.save();
+
+    cache.invalidatePrefix('reports_');
+    cache.invalidatePrefix('dash_');
 
     res.status(200).json({
       success: true,

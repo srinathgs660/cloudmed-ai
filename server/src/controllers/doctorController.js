@@ -2,6 +2,7 @@ const Doctor = require('../models/Doctor');
 const User = require('../models/User');
 const Department = require('../models/Department');
 const Appointment = require('../models/Appointment');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/doctors
@@ -11,14 +12,19 @@ const getDoctors = async (req, res, next) => {
   try {
     const { search, department, specialization, sortBy = 'experience', order = 'desc' } = req.query;
 
+    const cacheKey = `doctors_${search || ''}_${department || ''}_${specialization || ''}_${sortBy}_${order}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     let query = {};
 
     if (department) {
-      // Allow passing department ID or department name
       if (department.match(/^[0-9a-fA-F]{24}$/)) {
         query.departmentId = department;
       } else {
-        const deptDoc = await Department.findOne({ name: { $regex: department, $options: 'i' } });
+        const deptDoc = await Department.findOne({ name: { $regex: department, $options: 'i' } }).lean();
         if (deptDoc) query.departmentId = deptDoc._id;
       }
     }
@@ -33,7 +39,7 @@ const getDoctors = async (req, res, next) => {
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
       ];
-      const matchedUsers = await User.find(userFilter).select('_id');
+      const matchedUsers = await User.find(userFilter).select('_id').lean();
       query.userId = { $in: matchedUsers.map((u) => u._id) };
     }
 
@@ -43,13 +49,18 @@ const getDoctors = async (req, res, next) => {
     const doctors = await Doctor.find(query)
       .populate('userId', 'name email phone profileImage isActive')
       .populate('departmentId', 'name description')
-      .sort(sortOptions);
+      .sort(sortOptions)
+      .lean();
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       count: doctors.length,
       data: doctors,
-    });
+    };
+
+    cache.set(cacheKey, responsePayload, 60); // 60 seconds TTL
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -137,7 +148,10 @@ const createDoctor = async (req, res, next) => {
 
     const populated = await Doctor.findById(doctor._id)
       .populate('userId', 'name email phone profileImage')
-      .populate('departmentId', 'name');
+      .populate('departmentId', 'name')
+      .lean();
+
+    cache.invalidatePrefix('doctors');
 
     res.status(201).json({
       success: true,
@@ -193,7 +207,10 @@ const updateDoctor = async (req, res, next) => {
       { new: true, runValidators: true }
     )
       .populate('userId', 'name email phone profileImage')
-      .populate('departmentId', 'name');
+      .populate('departmentId', 'name')
+      .lean();
+
+    cache.invalidatePrefix('doctors');
 
     res.status(200).json({
       success: true,
@@ -215,6 +232,7 @@ const deleteDoctor = async (req, res, next) => {
     }
 
     await User.findByIdAndUpdate(doctor.userId, { isActive: false });
+    cache.invalidatePrefix('doctors');
 
     res.status(200).json({
       success: true,

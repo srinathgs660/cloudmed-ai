@@ -12,12 +12,13 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const PrescriptionsPage = () => {
   const { user } = useAuth();
-  const [prescriptions, setPrescriptions] = useState([]);
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [prescriptions, setPrescriptions] = useState(() => getCached('prescriptions') || []);
+  const [patients, setPatients] = useState(() => getCached('patients') || []);
+  const [loading, setLoading] = useState(() => !getCached('prescriptions'));
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,9 +38,11 @@ export const PrescriptionsPage = () => {
 
   const fetchPrescriptions = async () => {
     try {
-      setLoading(true);
+      if (!prescriptions.length) setLoading(true);
       const res = await api.get('/prescriptions');
-      setPrescriptions(res.data.data || []);
+      const list = res.data.data || [];
+      setPrescriptions(list);
+      setCached('prescriptions', list);
     } catch (e) {
       console.error('Failed to load prescriptions:', e);
     } finally {
@@ -50,9 +53,11 @@ export const PrescriptionsPage = () => {
   const fetchPatients = async () => {
     try {
       const res = await api.get('/patients');
-      setPatients(res.data.data || []);
-      if (res.data.data?.length > 0) {
-        setSelectedPatientId(res.data.data[0]._id);
+      const list = res.data.data || [];
+      setPatients(list);
+      setCached('patients', list);
+      if (list.length > 0) {
+        setSelectedPatientId(list[0]._id);
       }
     } catch (e) {}
   };
@@ -84,6 +89,7 @@ export const PrescriptionsPage = () => {
         medicines,
         instructions: generalInstructions,
       });
+      invalidateCache('prescriptions');
       setModalOpen(false);
       setMedicines([{ medicine: '', dosage: '500 mg', frequency: '2 times/day', duration: '5 days', instructions: 'After food' }]);
       setGeneralInstructions('');

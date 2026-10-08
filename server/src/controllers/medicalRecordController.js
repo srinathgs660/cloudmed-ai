@@ -2,6 +2,7 @@ const MedicalRecord = require('../models/MedicalRecord');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const Notification = require('../models/Notification');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/medical-records
@@ -9,16 +10,23 @@ const Notification = require('../models/Notification');
 const getMedicalRecords = async (req, res, next) => {
   try {
     const { patientId, doctorId } = req.query;
+
+    const cacheKey = `medrecords_${req.user.role}_${req.user._id}_${patientId || ''}_${doctorId || ''}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     let query = {};
 
     if (req.user.role === 'PATIENT') {
-      const patient = await Patient.findOne({ userId: req.user._id });
+      const patient = await Patient.findOne({ userId: req.user._id }).lean();
       if (!patient) return res.status(200).json({ success: true, count: 0, data: [] });
       query.patientId = patient._id;
     } else if (req.user.role === 'DOCTOR') {
       if (patientId) query.patientId = patientId;
       // Doctor can query specific patient or all records they created
-      const doc = await Doctor.findOne({ userId: req.user._id });
+      const doc = await Doctor.findOne({ userId: req.user._id }).lean();
       if (doc && !patientId) query.doctorId = doc._id;
     } else {
       if (patientId) query.patientId = patientId;
@@ -34,13 +42,17 @@ const getMedicalRecords = async (req, res, next) => {
         path: 'doctorId',
         populate: { path: 'userId', select: 'name email' },
       })
-      .sort({ visitDate: -1 });
+      .sort({ visitDate: -1 })
+      .lean();
 
-    res.status(200).json({
+    const result = {
       success: true,
       count: records.length,
       data: records,
-    });
+    };
+
+    cache.set(cacheKey, result, 30);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -128,7 +140,11 @@ const createMedicalRecord = async (req, res, next) => {
 
     const populated = await MedicalRecord.findById(record._id)
       .populate({ path: 'patientId', populate: { path: 'userId', select: 'name email' } })
-      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name' } });
+      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name' } })
+      .lean();
+
+    cache.invalidatePrefix('medrecords_');
+    cache.invalidatePrefix('dash_');
 
     res.status(201).json({
       success: true,

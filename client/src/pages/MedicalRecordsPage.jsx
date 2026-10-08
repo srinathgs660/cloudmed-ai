@@ -12,12 +12,13 @@ import {
   Clock,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const MedicalRecordsPage = () => {
   const { user } = useAuth();
-  const [records, setRecords] = useState([]);
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [records, setRecords] = useState(() => getCached('medical_records') || []);
+  const [patients, setPatients] = useState(() => getCached('patients') || []);
+  const [loading, setLoading] = useState(() => !getCached('medical_records'));
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,9 +41,11 @@ export const MedicalRecordsPage = () => {
 
   const fetchRecords = async () => {
     try {
-      setLoading(true);
+      if (!records.length) setLoading(true);
       const res = await api.get('/medical-records');
-      setRecords(res.data.data || []);
+      const list = res.data.data || [];
+      setRecords(list);
+      setCached('medical_records', list);
     } catch (e) {
       console.error('Failed to load records:', e);
     } finally {
@@ -53,9 +56,11 @@ export const MedicalRecordsPage = () => {
   const fetchPatients = async () => {
     try {
       const res = await api.get('/patients');
-      setPatients(res.data.data || []);
-      if (res.data.data?.length > 0) {
-        setFormData((prev) => ({ ...prev, patientId: res.data.data[0]._id }));
+      const list = res.data.data || [];
+      setPatients(list);
+      setCached('patients', list);
+      if (list.length > 0) {
+        setFormData((prev) => ({ ...prev, patientId: prev.patientId || list[0]._id }));
       }
     } catch (e) {}
   };
@@ -68,6 +73,7 @@ export const MedicalRecordsPage = () => {
         ...formData,
         symptoms: formData.symptoms.split(',').map((s) => s.trim()),
       });
+      invalidateCache('medical_records');
       setModalOpen(false);
       setFormData({
         patientId: patients[0]?._id || '',

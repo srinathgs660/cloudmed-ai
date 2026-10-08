@@ -15,13 +15,14 @@ import {
   Search,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const AppointmentsPage = () => {
   const { user } = useAuth();
-  const [appointments, setAppointments] = useState([]);
-  const [doctors, setDoctors] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [appointments, setAppointments] = useState(() => getCached('appointments') || []);
+  const [doctors, setDoctors] = useState(() => getCached('doctors') || []);
+  const [departments, setDepartments] = useState(() => getCached('departments') || []);
+  const [loading, setLoading] = useState(() => !getCached('appointments'));
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('All');
@@ -57,23 +58,33 @@ export const AppointmentsPage = () => {
         api.get('/doctors'),
         api.get('/departments'),
       ]);
-      setDoctors(docRes.data.data || []);
-      setDepartments(deptRes.data.data || []);
-      if (deptRes.data.data?.length > 0) {
-        setBookingForm((prev) => ({ ...prev, departmentId: deptRes.data.data[0]._id }));
+      const docs = docRes.data.data || [];
+      const depts = deptRes.data.data || [];
+      setDoctors(docs);
+      setDepartments(depts);
+      setCached('doctors', docs);
+      setCached('departments', depts);
+      if (depts.length > 0) {
+        setBookingForm((prev) => ({ ...prev, departmentId: prev.departmentId || depts[0]._id }));
       }
     } catch (e) {}
   };
 
   const fetchAppointments = async () => {
     try {
-      setLoading(true);
+      if (!appointments.length && (statusFilter !== 'All' || priorityFilter !== 'All')) {
+        setLoading(true);
+      }
       const params = {};
       if (statusFilter !== 'All') params.status = statusFilter;
       if (priorityFilter !== 'All') params.priority = priorityFilter;
 
       const res = await api.get('/appointments', { params });
-      setAppointments(res.data.data || []);
+      const list = res.data.data || [];
+      setAppointments(list);
+      if (statusFilter === 'All' && priorityFilter === 'All') {
+        setCached('appointments', list);
+      }
     } catch (e) {
       console.error('Failed to load appointments:', e);
     } finally {
@@ -88,6 +99,7 @@ export const AppointmentsPage = () => {
 
     try {
       await api.post('/appointments', bookingForm);
+      invalidateCache('appointments');
       setBookModalOpen(false);
       setBookingForm({
         ...bookingForm,
@@ -107,6 +119,7 @@ export const AppointmentsPage = () => {
   const handleUpdateStatus = async (id, status) => {
     try {
       await api.put(`/appointments/${id}/status`, { status });
+      invalidateCache('appointments');
       fetchAppointments();
     } catch (e) {
       alert('Status update failed');

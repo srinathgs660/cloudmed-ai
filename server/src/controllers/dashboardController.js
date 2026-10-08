@@ -6,12 +6,18 @@ const Appointment = require('../models/Appointment');
 const MedicalRecord = require('../models/MedicalRecord');
 const AIAssessment = require('../models/AIAssessment');
 const MedicalReport = require('../models/MedicalReport');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/dashboard/admin
  */
 const getAdminDashboard = async (req, res, next) => {
   try {
+    const cached = cache.get('dashboard_admin');
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
 
     const [
@@ -37,10 +43,11 @@ const getAdminDashboard = async (req, res, next) => {
         .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name' } })
         .populate('departmentId', 'name')
         .sort({ createdAt: -1 })
-        .limit(6),
-      Appointment.find().populate('departmentId', 'name'),
-      Patient.find(),
-      AIAssessment.find(),
+        .limit(6)
+        .lean(),
+      Appointment.find().populate('departmentId', 'name').lean(),
+      Patient.find().lean(),
+      AIAssessment.find().lean(),
     ]);
 
     // 1. Appointments by Status
@@ -99,7 +106,7 @@ const getAdminDashboard = async (req, res, next) => {
       { name: 'High Risk', value: Math.max(high, 3) },
     ];
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       stats: {
         totalPatients,
@@ -116,7 +123,11 @@ const getAdminDashboard = async (req, res, next) => {
         aiRiskDistribution,
       },
       recentActivity: recentAppointments,
-    });
+    };
+
+    cache.set('dashboard_admin', responsePayload, 15);
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -127,9 +138,15 @@ const getAdminDashboard = async (req, res, next) => {
  */
 const getDoctorDashboard = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id }).populate('departmentId', 'name');
+    const doctor = await Doctor.findOne({ userId: req.user._id }).populate('departmentId', 'name').lean();
     if (!doctor) {
       return res.status(404).json({ success: false, message: 'Doctor profile not found.' });
+    }
+
+    const cacheKey = `dashboard_doctor_${doctor._id}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -137,14 +154,15 @@ const getDoctorDashboard = async (req, res, next) => {
     const [todayAppointments, allDocAppointments, medicalRecordsCount] = await Promise.all([
       Appointment.find({ doctorId: doctor._id, date: todayStr })
         .populate({ path: 'patientId', populate: { path: 'userId', select: 'name email phone profileImage' } })
-        .sort({ time: 1 }),
-      Appointment.find({ doctorId: doctor._id }).populate('patientId'),
+        .sort({ time: 1 })
+        .lean(),
+      Appointment.find({ doctorId: doctor._id }).populate('patientId').lean(),
       MedicalRecord.countDocuments({ doctorId: doctor._id }),
     ]);
 
     // Risk count among assigned patients
     const patientIds = [...new Set(allDocAppointments.map((a) => a.patientId ? a.patientId._id.toString() : null).filter(Boolean))];
-    const assignedPatients = await Patient.find({ _id: { $in: patientIds } });
+    const assignedPatients = await Patient.find({ _id: { $in: patientIds } }).lean();
 
     let high = 0, med = 0, low = 0;
     assignedPatients.forEach((p) => {
@@ -154,7 +172,7 @@ const getDoctorDashboard = async (req, res, next) => {
       else low++;
     });
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       doctor,
       stats: {
@@ -168,7 +186,11 @@ const getDoctorDashboard = async (req, res, next) => {
         },
       },
       todayAppointments,
-    });
+    };
+
+    cache.set(cacheKey, responsePayload, 15);
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -179,9 +201,15 @@ const getDoctorDashboard = async (req, res, next) => {
  */
 const getPatientDashboard = async (req, res, next) => {
   try {
-    const patient = await Patient.findOne({ userId: req.user._id }).populate('userId', 'name email phone');
+    const patient = await Patient.findOne({ userId: req.user._id }).populate('userId', 'name email phone').lean();
     if (!patient) {
       return res.status(404).json({ success: false, message: 'Patient profile not found.' });
+    }
+
+    const cacheKey = `dashboard_patient_${patient._id}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -194,27 +222,33 @@ const getPatientDashboard = async (req, res, next) => {
       })
         .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name email' } })
         .populate('departmentId', 'name')
-        .sort({ date: 1, time: 1 }),
+        .sort({ date: 1, time: 1 })
+        .lean(),
       MedicalRecord.find({ patientId: patient._id })
         .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name' } })
         .sort({ visitDate: -1 })
-        .limit(3),
-      MedicalReport.find({ patientId: patient._id }).sort({ createdAt: -1 }).limit(3),
-      AIAssessment.findOne({ patientId: patient._id, assessmentType: 'HEALTH_RISK' }).sort({ createdAt: -1 }),
+        .limit(3)
+        .lean(),
+      MedicalReport.find({ patientId: patient._id }).sort({ createdAt: -1 }).limit(3).lean(),
+      AIAssessment.findOne({ patientId: patient._id, assessmentType: 'HEALTH_RISK' }).sort({ createdAt: -1 }).lean(),
     ]);
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       patient,
       upcomingAppointment,
       recentRecords,
       recentReports,
       latestAssessment: latestAssessment || {
-        result: patient.latestRiskScore.level || 'Not Assessed',
-        probability: patient.latestRiskScore.probability || 0,
+        result: patient.latestRiskScore?.level || 'Not Assessed',
+        probability: patient.latestRiskScore?.probability || 0,
         message: 'No comprehensive health assessment performed yet. Take a 2-minute screening.',
       },
-    });
+    };
+
+    cache.set(cacheKey, responsePayload, 15);
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -226,10 +260,15 @@ const getPatientDashboard = async (req, res, next) => {
  */
 const getAIAnalytics = async (req, res, next) => {
   try {
+    const cached = cache.get('dashboard_ai_analytics');
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     const [allAssessments, patients, allAppointments] = await Promise.all([
-      AIAssessment.find().sort({ createdAt: -1 }),
-      Patient.find(),
-      Appointment.find(),
+      AIAssessment.find().sort({ createdAt: -1 }).lean(),
+      Patient.find().lean(),
+      Appointment.find().lean(),
     ]);
 
     let high = 0, med = 0, low = 0;
@@ -279,7 +318,7 @@ const getAIAnalytics = async (req, res, next) => {
       { month: 'Oct', lowRisk: 55, mediumRisk: 27, highRisk: 14 },
     ];
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       stats: {
         totalAssessed,
@@ -293,7 +332,11 @@ const getAIAnalytics = async (req, res, next) => {
         monthlyRiskTrend,
       },
       disclaimer: 'AI results are intended for educational and decision-support purposes only and must not replace professional medical judgment.',
-    });
+    };
+
+    cache.set('dashboard_ai_analytics', responsePayload, 15);
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }

@@ -3,6 +3,7 @@ const Doctor = require('../models/Doctor');
 const Patient = require('../models/Patient');
 const Notification = require('../models/Notification');
 const { predictAppointmentPriority } = require('../services/aiClient');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/appointments
@@ -12,15 +13,21 @@ const getAppointments = async (req, res, next) => {
   try {
     const { doctorId, patientId, status, priority, date, page = 1, limit = 50 } = req.query;
 
+    const cacheKey = `appointments_${req.user.role}_${req.user._id}_${doctorId || ''}_${patientId || ''}_${status || ''}_${priority || ''}_${date || ''}_${page}_${limit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     let query = {};
 
     // Role scoping
     if (req.user.role === 'PATIENT') {
-      const patient = await Patient.findOne({ userId: req.user._id });
+      const patient = await Patient.findOne({ userId: req.user._id }).lean();
       if (!patient) return res.status(200).json({ success: true, count: 0, data: [] });
       query.patientId = patient._id;
     } else if (req.user.role === 'DOCTOR') {
-      const doctor = await Doctor.findOne({ userId: req.user._id });
+      const doctor = await Doctor.findOne({ userId: req.user._id }).lean();
       if (!doctor) return res.status(200).json({ success: true, count: 0, data: [] });
       query.doctorId = doctor._id;
     } else {
@@ -35,29 +42,34 @@ const getAppointments = async (req, res, next) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const appointments = await Appointment.find(query)
-      .populate({
-        path: 'patientId',
-        populate: { path: 'userId', select: 'name email phone' },
-      })
-      .populate({
-        path: 'doctorId',
-        populate: { path: 'userId', select: 'name email phone' },
-      })
-      .populate('departmentId', 'name')
-      .sort({ date: -1, time: 1 })
-      .skip(skip)
-      .limit(Number(limit));
+    const [appointments, total] = await Promise.all([
+      Appointment.find(query)
+        .populate({
+          path: 'patientId',
+          populate: { path: 'userId', select: 'name email phone' },
+        })
+        .populate({
+          path: 'doctorId',
+          populate: { path: 'userId', select: 'name email phone' },
+        })
+        .populate('departmentId', 'name')
+        .sort({ date: -1, time: 1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Appointment.countDocuments(query),
+    ]);
 
-    const total = await Appointment.countDocuments(query);
-
-    res.status(200).json({
+    const result = {
       success: true,
       count: appointments.length,
       total,
       currentPage: Number(page),
       data: appointments,
-    });
+    };
+
+    cache.set(cacheKey, result, 30);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -199,7 +211,11 @@ const createAppointment = async (req, res, next) => {
     const populated = await Appointment.findById(appointment._id)
       .populate({ path: 'patientId', populate: { path: 'userId', select: 'name email phone' } })
       .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name email' } })
-      .populate('departmentId', 'name');
+      .populate('departmentId', 'name')
+      .lean();
+
+    cache.invalidatePrefix('appointments');
+    cache.invalidatePrefix('dash_');
 
     res.status(201).json({
       success: true,
@@ -236,6 +252,9 @@ const updateAppointmentStatus = async (req, res, next) => {
     if (notes !== undefined) appointment.notes = notes;
     await appointment.save();
 
+    cache.invalidatePrefix('appointments');
+    cache.invalidatePrefix('dash_');
+
     // Trigger notification to patient
     if (appointment.patientId && appointment.patientId.userId) {
       await Notification.create({
@@ -270,6 +289,9 @@ const cancelAppointment = async (req, res, next) => {
 
     appointment.status = 'Cancelled';
     await appointment.save();
+
+    cache.invalidatePrefix('appointments');
+    cache.invalidatePrefix('dash_');
 
     res.status(200).json({
       success: true,

@@ -15,11 +15,12 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { Card, Badge, Button, Loader } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const DoctorDashboard = () => {
   const { user } = useAuth();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getCached('doctor_dashboard') || null);
+  const [loading, setLoading] = useState(() => !getCached('doctor_dashboard'));
 
   useEffect(() => {
     fetchDashboard();
@@ -27,8 +28,10 @@ export const DoctorDashboard = () => {
 
   const fetchDashboard = async () => {
     try {
+      if (!data) setLoading(true);
       const res = await api.get('/dashboard/doctor');
       setData(res.data);
+      setCached('doctor_dashboard', res.data, 30000);
     } catch (err) {
       console.error('Doctor dashboard load failed:', err);
     } finally {
@@ -39,6 +42,8 @@ export const DoctorDashboard = () => {
   const handleUpdateStatus = async (appointmentId, newStatus) => {
     try {
       await api.put(`/appointments/${appointmentId}/status`, { status: newStatus });
+      invalidateCache('doctor_dashboard');
+      invalidateCache('appointments');
       fetchDashboard();
     } catch (e) {
       alert('Failed to update status');

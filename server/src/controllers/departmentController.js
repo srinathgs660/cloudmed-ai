@@ -1,12 +1,18 @@
 const Department = require('../models/Department');
 const Doctor = require('../models/Doctor');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/departments
  */
 const getDepartments = async (req, res, next) => {
   try {
-    const departments = await Department.find().sort({ name: 1 });
+    const cached = cache.get('departments_all');
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
+    const departments = await Department.find().sort({ name: 1 }).lean();
 
     // Aggregate doctor count per department
     const doctorCounts = await Doctor.aggregate([
@@ -19,15 +25,19 @@ const getDepartments = async (req, res, next) => {
     });
 
     const dataWithCounts = departments.map((dept) => ({
-      ...dept.toObject(),
+      ...dept,
       doctorCount: countMap[dept._id.toString()] || 0,
     }));
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       count: dataWithCounts.length,
       data: dataWithCounts,
-    });
+    };
+
+    cache.set('departments_all', responsePayload, 120); // 2 min TTL
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -51,6 +61,8 @@ const createDepartment = async (req, res, next) => {
       headDoctorName,
       iconName: iconName || 'Activity',
     });
+
+    cache.delete('departments_all');
 
     res.status(201).json({
       success: true,
@@ -84,6 +96,8 @@ const updateDepartment = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Department not found.' });
     }
 
+    cache.delete('departments_all');
+
     res.status(200).json({
       success: true,
       data: department,
@@ -106,6 +120,8 @@ const deleteDepartment = async (req, res, next) => {
     // Toggle status to Inactive rather than breaking foreign keys
     department.status = department.status === 'Active' ? 'Inactive' : 'Active';
     await department.save();
+
+    cache.delete('departments_all');
 
     res.status(200).json({
       success: true,

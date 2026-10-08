@@ -2,6 +2,7 @@ const Prescription = require('../models/Prescription');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const Notification = require('../models/Notification');
+const cache = require('../utils/cache');
 
 /**
  * @route GET /api/prescriptions
@@ -9,14 +10,21 @@ const Notification = require('../models/Notification');
 const getPrescriptions = async (req, res, next) => {
   try {
     const { patientId } = req.query;
+
+    const cacheKey = `prescriptions_${req.user.role}_${req.user._id}_${patientId || ''}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
     let query = {};
 
     if (req.user.role === 'PATIENT') {
-      const patient = await Patient.findOne({ userId: req.user._id });
+      const patient = await Patient.findOne({ userId: req.user._id }).lean();
       if (!patient) return res.status(200).json({ success: true, count: 0, data: [] });
       query.patientId = patient._id;
     } else if (req.user.role === 'DOCTOR') {
-      const doc = await Doctor.findOne({ userId: req.user._id });
+      const doc = await Doctor.findOne({ userId: req.user._id }).lean();
       if (patientId) query.patientId = patientId;
       else if (doc) query.doctorId = doc._id;
     } else {
@@ -33,13 +41,17 @@ const getPrescriptions = async (req, res, next) => {
         populate: { path: 'userId', select: 'name email specialization qualification' },
       })
       .populate('medicalRecordId', 'diagnosis visitDate')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    res.status(200).json({
+    const result = {
       success: true,
       count: prescriptions.length,
       data: prescriptions,
-    });
+    };
+
+    cache.set(cacheKey, result, 30);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -117,7 +129,11 @@ const createPrescription = async (req, res, next) => {
 
     const populated = await Prescription.findById(prescription._id)
       .populate({ path: 'patientId', populate: { path: 'userId', select: 'name email' } })
-      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name' } });
+      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'name' } })
+      .lean();
+
+    cache.invalidatePrefix('prescriptions_');
+    cache.invalidatePrefix('dash_');
 
     res.status(201).json({
       success: true,

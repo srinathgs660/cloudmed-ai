@@ -19,11 +19,12 @@ import {
   Check,
 } from 'lucide-react';
 import { Card, Badge, Button, Modal, Loader, EmptyState, RiskCard } from '../components/UI';
+import { getCached, setCached, invalidateCache } from '../services/clientCache';
 
 export const PatientsPage = () => {
   const { user } = useAuth();
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [patients, setPatients] = useState(() => getCached('patients') || []);
+  const [loading, setLoading] = useState(() => !getCached('patients'));
   const [search, setSearch] = useState('');
   const [riskFilter, setRiskFilter] = useState('All');
   const [bloodGroupFilter, setBloodGroupFilter] = useState('');
@@ -56,14 +57,20 @@ export const PatientsPage = () => {
 
   const fetchPatients = async () => {
     try {
-      setLoading(true);
+      if (!patients.length && (search || riskFilter !== 'All' || bloodGroupFilter)) {
+        setLoading(true);
+      }
       const params = {};
       if (search) params.search = search;
       if (riskFilter !== 'All') params.riskLevel = riskFilter;
       if (bloodGroupFilter) params.bloodGroup = bloodGroupFilter;
 
       const res = await api.get('/patients', { params });
-      setPatients(res.data.data || []);
+      const list = res.data.data || [];
+      setPatients(list);
+      if (!search && riskFilter === 'All' && !bloodGroupFilter) {
+        setCached('patients', list);
+      }
     } catch (err) {
       console.error('Failed to fetch patients:', err);
     } finally {
@@ -136,6 +143,7 @@ export const PatientsPage = () => {
         await api.post('/patients', payload);
       }
 
+      invalidateCache('patients');
       setAddEditModal(false);
       fetchPatients();
     } catch (err) {
@@ -147,6 +155,7 @@ export const PatientsPage = () => {
     if (!window.confirm('Are you sure you want to deactivate this patient account?')) return;
     try {
       await api.delete(`/patients/${id}`);
+      invalidateCache('patients');
       fetchPatients();
     } catch (err) {
       alert('Failed to deactivate patient');

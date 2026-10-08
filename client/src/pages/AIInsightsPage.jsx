@@ -11,6 +11,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Card, Badge, Loader } from '../components/UI';
+import { getCached, setCached } from '../services/clientCache';
 import {
   ResponsiveContainer,
   PieChart,
@@ -28,8 +29,8 @@ import {
 } from 'recharts';
 
 export const AIInsightsPage = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getCached('ai_analytics') || null);
+  const [loading, setLoading] = useState(() => !getCached('ai_analytics'));
 
   useEffect(() => {
     fetchAIAnalytics();
@@ -37,8 +38,10 @@ export const AIInsightsPage = () => {
 
   const fetchAIAnalytics = async () => {
     try {
+      if (!data) setLoading(true);
       const res = await api.get('/dashboard/ai-analytics');
       setData(res.data);
+      setCached('ai_analytics', res.data, 30000);
     } catch (e) {
       console.error('Failed to load AI analytics:', e);
     } finally {

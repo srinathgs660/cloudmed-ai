@@ -14,6 +14,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { Card, Badge, Loader } from '../components/UI';
+import { getCached, setCached } from '../services/clientCache';
 import {
   ResponsiveContainer,
   PieChart,
@@ -34,8 +35,8 @@ const RISK_COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 const STATUS_COLORS = ['#f59e0b', '#0284c7', '#10b981', '#ef4444'];
 
 export const AdminDashboard = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getCached('admin_dashboard') || null);
+  const [loading, setLoading] = useState(() => !getCached('admin_dashboard'));
 
   useEffect(() => {
     fetchDashboard();
@@ -43,8 +44,10 @@ export const AdminDashboard = () => {
 
   const fetchDashboard = async () => {
     try {
+      if (!data) setLoading(true);
       const res = await api.get('/dashboard/admin');
       setData(res.data);
+      setCached('admin_dashboard', res.data, 30000);
     } catch (err) {
       console.error('Failed to load admin dashboard data:', err);
     } finally {
