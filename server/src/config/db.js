@@ -7,6 +7,8 @@ const connectDB = async () => {
     const conn = await mongoose.connect(mongoURI, {
       autoIndex: true,
       dbName: 'cloudmed_ai',
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
     });
     console.log(`[MongoDB] Connected to database: ${conn.connection.host} / ${conn.connection.name}`);
   } catch (error) {
